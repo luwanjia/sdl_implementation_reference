@@ -34,7 +34,7 @@
 #define SRC_COMPONENTS_SECURITY_MANAGER_INCLUDE_SECURITY_MANAGER_SECURITY_MANAGER_IMPL_H_
 
 #include <list>
-#include <string.h>
+#include <string>
 
 #include "utils/macro.h"
 #include "utils/message_queue.h"

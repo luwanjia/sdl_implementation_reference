@@ -30,12 +30,9 @@
 
 set(target dbms)
 
-#find_package(Sqlite3 REQUIRED)
+find_package(Sqlite3 REQUIRED)
 
-include_directories(
-  ${COMPONENTS_DIR}/utils/include/utils
-  ${SQLITE3_INCLUDE_DIRECTORY}
-)
+include_directories(${COMPONENTS_DIR}/utils/include/utils)
 
 set(SOURCES
   ./sql_database.cc
