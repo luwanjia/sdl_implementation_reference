@@ -195,7 +195,7 @@ void CustomString::InitData() {
     return;
   }
   amount_characters_ = CalculateLengthOfString(mb_string_.c_str());
-  is_ascii_string_ = amount_characters_ == mb_string_.size();
+  is_ascii_string_ = true;//amount_characters_ == mb_string_.size();
 }
 
 }  // namespace custom_string
