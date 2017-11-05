@@ -41,6 +41,8 @@
 #include "transport_manager/usb/libusb/usb_connection.h"
 #include "transport_manager/transport_adapter/transport_adapter_impl.h"
 
+#define	TRANSPORT_USB_BUFFER_MAX_SIZE		(16*1024)
+
 #include "utils/logger.h"
 
 namespace transport_manager {
@@ -64,6 +66,7 @@ UsbConnection::UsbConnection(const DeviceUID& device_uid,
     , out_endpoint_(0)
     , out_endpoint_max_packet_size_(0)
     , in_buffer_(NULL)
+    , in_buffer_size_(0)
     , in_transfer_(NULL)
     , out_transfer_(0)
     , out_messages_()
@@ -96,7 +99,7 @@ bool UsbConnection::PostInTransfer() {
                             device_handle_,
                             in_endpoint_,
                             in_buffer_,
-                            in_endpoint_max_packet_size_,
+                            in_buffer_size_,
                             InTransferCallback,
                             this,
                             0);
@@ -126,7 +129,7 @@ std::string hex_data(const unsigned char* const buffer,
 
 void UsbConnection::OnInTransfer(libusb_transfer* transfer) {
   LOG4CXX_TRACE(logger_, "enter with Libusb_transfer*: " << transfer);
-  if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
+  if (transfer->status == LIBUSB_TRANSFER_COMPLETED && transfer->actual_length > 0) {
     LOG4CXX_DEBUG(logger_,
                   "USB incoming transfer, size:"
                       << transfer->actual_length << ", data:"
@@ -134,6 +137,9 @@ void UsbConnection::OnInTransfer(libusb_transfer* transfer) {
     ::protocol_handler::RawMessagePtr data(new protocol_handler::RawMessage(
         0, 0, in_buffer_, transfer->actual_length));
     controller_->DataReceiveDone(device_uid_, app_handle_, data);
+  } else if(transfer->status == LIBUSB_TRANSFER_STALL){
+    AbortConnection();
+    return;
   } else {
     LOG4CXX_ERROR(logger_,
                   "USB incoming transfer failed: "
@@ -168,6 +174,9 @@ void UsbConnection::PopOutMessage() {
 }
 
 bool UsbConnection::PostOutTransfer() {
+  if (disconnecting_) {
+    return false;
+  }
   LOG4CXX_TRACE(logger_, "enter");
   out_transfer_ = libusb_alloc_transfer(0);
   if (0 == out_transfer_) {
@@ -200,11 +209,14 @@ bool UsbConnection::PostOutTransfer() {
 }
 
 void UsbConnection::OnOutTransfer(libusb_transfer* transfer) {
+  if (disconnecting_) {
+    return ;
+  }
   LOG4CXX_TRACE(logger_, "enter with  Libusb_transfer*: " << transfer);
   sync_primitives::AutoLock locker(out_messages_mutex_);
   if (transfer->status == LIBUSB_TRANSFER_COMPLETED) {
     bytes_sent_ += transfer->actual_length;
-    if (bytes_sent_ == current_out_message_->data_size()) {
+    if (current_out_message_.valid() && bytes_sent_ == current_out_message_->data_size()) {
       LOG4CXX_DEBUG(
           logger_,
           "USB out transfer, data sent: " << current_out_message_.get());
@@ -212,12 +224,14 @@ void UsbConnection::OnOutTransfer(libusb_transfer* transfer) {
       PopOutMessage();
     }
   } else {
-    LOG4CXX_ERROR(
-        logger_,
-        "USB out transfer failed: " << libusb_error_name(transfer->status));
-    controller_->DataSendFailed(
-        device_uid_, app_handle_, current_out_message_, DataSendError());
-    PopOutMessage();
+    if (current_out_message_.valid() && bytes_sent_ == current_out_message_->data_size()) {
+      LOG4CXX_ERROR(
+          logger_,
+          "USB out transfer failed: " << libusb_error_name(transfer->status));
+      controller_->DataSendFailed(
+          device_uid_, app_handle_, current_out_message_, DataSendError());
+      PopOutMessage();
+    }
   }
   if (!current_out_message_.valid()) {
     libusb_free_transfer(transfer);
@@ -281,6 +295,9 @@ void UsbConnection::Finalise() {
     }
   }
   while (waiting_in_transfer_cancel_ || waiting_out_transfer_cancel_) {
+    if (disconnecting_) {
+      break;
+    }
     pthread_yield();
   }
   LOG4CXX_TRACE(logger_, "exit");
@@ -307,7 +324,15 @@ bool UsbConnection::Init() {
     LOG4CXX_TRACE(logger_, "exit with FALSE. Condition: !FindEndpoints()");
     return false;
   }
-  in_buffer_ = new unsigned char[in_endpoint_max_packet_size_];
+  
+  if(in_endpoint_max_packet_size_ < TRANSPORT_USB_BUFFER_MAX_SIZE){
+  	in_buffer_size_ = TRANSPORT_USB_BUFFER_MAX_SIZE;
+  }
+  else {
+  	in_buffer_size_ = in_endpoint_max_packet_size_;
+  }
+
+  in_buffer_ = new unsigned char[in_buffer_size_];
   in_transfer_ = libusb_alloc_transfer(0);
   if (NULL == in_transfer_) {
     LOG4CXX_ERROR(logger_, "libusb_alloc_transfer failed");

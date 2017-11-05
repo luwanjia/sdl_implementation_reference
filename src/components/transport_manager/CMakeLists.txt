@@ -70,6 +70,16 @@ if (BUILD_BT_SUPPORT)
   )
 endif()
 
+if (BUILD_USBMUXD_SUPPORT)
+  list (APPEND SOURCES
+  ${TM_SRC_DIR}/usbmuxd/usbmuxd_transport_adapter.cc
+  ${TM_SRC_DIR}/usbmuxd/usbmuxd_client_listener.cc
+  ${TM_SRC_DIR}/usbmuxd/usbmuxd_device.cc
+  ${TM_SRC_DIR}/usbmuxd/usbmuxd_socket_connection.cc
+  ${TM_SRC_DIR}/usbmuxd/usbmuxd_connection_factory.cc
+  )
+endif()
+
 if (BUILD_USB_SUPPORT)
   list (APPEND SOURCES
     ${TM_SRC_DIR}/usb/usb_aoa_adapter.cc
@@ -103,6 +113,16 @@ if (BUILD_USB_SUPPORT)
     target_link_libraries(${target} usbdi)
   endif()
 endif(BUILD_USB_SUPPORT)
+
+if (BUILD_USBMUXD_SUPPORT)
+set(LIRBRARYS 
+    libplist.so
+    libusbmuxd.so
+    xml2.so
+    pthread.so 
+    )
+target_link_libraries(${target} ${LIRBRARYS} usbmuxd) 
+endif()
 
 if(ENABLE_LOG)
   target_link_libraries(${target} log4cxx -L${LOG4CXX_LIBS_DIRECTORY})
