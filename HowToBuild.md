@@ -22,7 +22,7 @@ $sudo apt-get install lib32ncurses5 lib32z1 lib32stdc++6
 ### 4. Install all the packages for sdl dependence
 #### For x86 desktop:
 ```shell
-$sudo apt install libudev-dev libsqlite3-dev libssl-dev libbluetooth-dev libplist-dev libusbmuxd-dev
+$sudo apt install libudev-dev libsqlite3-dev libssl-dev libbluetooth-dev libplist-dev libusbmuxd-dev pkg-config
 ```
 #### For armhf desktop:
 We saved all the packages on the github, you just need download and install as follow.
